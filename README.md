@@ -1,9 +1,54 @@
-# tennis-elbow
+# Tennis Elbow Rehab
 
-Camera Roll: https://drive.google.com/drive/folders/1jmgtEXSnkitLw-S8i_N9wOYpqj012Zfh?usp=sharing
+## Install Dependencies
+```bash
+pip install -r requirements.txt
 
----------
 
-Rehabilitation exercises are vital for the recovery of patients with physical impairments, including conditions such as tennis elbow. However, their effectiveness relies heavily on precise execution and consistent monitoring, which are often constrained by the need for professional supervision. This project introduces an automated system specifically tailored for evaluating and visualizing rehabilitation exercises aimed at managing tennis elbow.
+Project Structure
 
-Utilizing body pose landmarks and motion features, the system applies advanced pose estimation algorithms to capture skeletal movements and assess exercise performance against predefined metrics. A clear visual representation of these movements provides actionable feedback, ensuring alignment with therapeutic objectives
+tennis_elbow_rehab/
+├── data/
+│   ├── raw_videos/               # Raw video files organized by exercise
+│   │   ├── wrist_extension/
+│   │   │   ├── Wrist_Extension_Strengthening_1/
+│   │   │   ├── Wrist_Extension_Strengthening_2/
+│   │   │   ├── Wrist_Extension_Strengthening_3/
+│   │   │   └── Wrist_Extension_Stretch/
+│   │   └── wrist_flexion/
+│   │       ├── Wrist_Flexion_Strengthening_1/
+│   │       ├── Wrist_Flexion_Strengthening_2/
+│   │       ├── Wrist_Flexion_Strengthening_3/
+│   │       └── Wrist_Flexion_Stretch/
+│   └── processed_data/           # Pickled landmarks/features
+├── models/
+│   ├── wrist_extension_model.pth
+│   └── wrist_flexion_model.pth
+├── src/
+│   ├── data_processing.py        # Video processing and landmark extraction
+│   ├── feature_engineering.py    # Biomechanical feature computation
+│   ├── model_training.py         # Model training scripts
+│   ├── real_time_eval.py         # Real-time evaluation
+│   └── ui_streamlit.py           # Streamlit UI
+├── requirements.txt
+└── README.md
+
+
+
+2. Process Videos
+
+python src/data_processing.py --raw_videos_dir data/raw_videos --processed_data_dir data/processed_data
+
+
+3. Train Models
+
+python src/model_training.py
+
+4. Real-time Evaluation
+
+python src/real_time_eval.py
+
+5. Launch Web Interface
+
+
+streamlit run src/ui_streamlit.py
