@@ -23,75 +23,112 @@ def calculate_exercise_specific_features(landmarks_sequence, exercise_type):
     
     # Primary metric calculation
     if config['primary_metric'] == 'elbow_flexion':
-        features['elbow_flexion'] = calculate_elbow_flexion(landmarks_sequence, config['key_joints']['elbow'], config['key_joints']['wrist'])
+        # Get shoulder, elbow, and wrist landmarks correctly
+        shoulder = np.array([
+            landmarks_sequence[11][0],
+            landmarks_sequence[11][1],
+            landmarks_sequence[11][2]
+        ], dtype=np.float32)
+        
+        elbow = np.array([
+            landmarks_sequence[config['key_joints']['elbow']][0],
+            landmarks_sequence[config['key_joints']['elbow']][1],
+            landmarks_sequence[config['key_joints']['elbow']][2]
+        ], dtype=np.float32)
+        
+        wrist = np.array([
+            landmarks_sequence[config['key_joints']['wrist']][0],
+            landmarks_sequence[config['key_joints']['wrist']][1],
+            landmarks_sequence[config['key_joints']['wrist']][2]
+        ], dtype=np.float32)
+        
+        # Vector from elbow to wrist
+        v1 = wrist - elbow
+        
+        # Reference vector (vertical)
+        v2 = np.array([0, -1, 0], dtype=np.float32)  # Downward reference vector
+        
+        dot_product = np.dot(v1, v2)
+        norm_v1 = np.linalg.norm(v1)
+        norm_v2 = np.linalg.norm(v2)
+        
+        if norm_v1 > 0 and norm_v2 > 0:
+            cos_theta = dot_product / (norm_v1 * norm_v2)
+            cos_theta = np.clip(cos_theta, -1.0, 1.0)
+            features['elbow_flexion'] = math.acos(cos_theta) * 180 / math.pi
     
     elif config['primary_metric'] == 'wrist_flexion_angle':
-        features['wrist_flexion_angle'] = calculate_wrist_flexion_angle(landmarks_sequence, config['key_joints']['elbow'], config['key_joints']['wrist'])
+        # Get elbow and wrist landmarks correctly
+        elbow = np.array([
+            landmarks_sequence[config['key_joints']['elbow']][0],
+            landmarks_sequence[config['key_joints']['elbow']][1],
+            landmarks_sequence[config['key_joints']['elbow']][2]
+        ], dtype=np.float32)
+        
+        wrist = np.array([
+            landmarks_sequence[config['key_joints']['wrist']][0],
+            landmarks_sequence[config['key_joints']['wrist']][1],
+            landmarks_sequence[config['key_joints']['wrist']][2]
+        ], dtype=np.float32)
+        
+        # Vector from elbow to wrist
+        v1 = wrist - elbow
+        
+        # Reference vector (vertical)
+        v2 = np.array([0, -1, 0], dtype=np.float32)  # Downward reference vector
+        
+        dot_product = np.dot(v1, v2)
+        norm_v1 = np.linalg.norm(v1)
+        
+        if norm_v1 > 0:
+            cos_theta = dot_product / norm_v1
+            cos_theta = np.clip(cos_theta, -1.0, 1.0)
+            features['wrist_flexion_angle'] = math.acos(cos_theta) * 180 / math.pi
     
     # Secondary metrics
     for metric in config['secondary_metrics']:
         if metric == 'wrist_deviation':
-            features['wrist_deviation'] = calculate_wrist_deviation(landmarks_sequence, config['key_joints']['elbow'], config['key_joints']['wrist'])
+            features['wrist_deviation'] = calculate_wrist_deviation(
+                landmarks_sequence, 
+                config['key_joints']['elbow'], 
+                config['key_joints']['wrist']
+            )
         elif metric == 'movement_smoothness':
             features['movement_smoothness'] = calculate_movement_smoothness(landmarks_sequence)
         elif metric == 'elbow_stability':
-            features['elbow_stability'] = calculate_elbow_stability(landmarks_sequence, config['key_joints']['elbow'])
+            features['elbow_stability'] = calculate_elbow_stability(
+                landmarks_sequence, 
+                config['key_joints']['elbow']
+            )
         elif metric == 'range_of_motion':
-            features['range_of_motion'] = calculate_range_of_motion(landmarks_sequence, config['key_joints']['elbow'], config['key_joints']['wrist'])
+            features['range_of_motion'] = calculate_range_of_motion(
+                landmarks_sequence, 
+                config['key_joints']['elbow'], 
+                config['key_joints']['wrist']
+            )
     
     return features
 
-def calculate_elbow_flexion(landmarks_sequence, elbow_idx, wrist_idx):
-    """Calculate elbow flexion angle for wrist extension exercise"""
-    shoulder = landmarks_sequence[11]  # Standard shoulder index
-    elbow = landmarks_sequence[elbow_idx]
-    wrist = landmarks_sequence[wrist_idx]
-    
-    v1 = np.array([shoulder[0] - elbow[0], shoulder[1] - elbow[1], shoulder[2] - elbow[2]])
-    v2 = np.array([wrist[0] - elbow[0], wrist[1] - elbow[1], wrist[2] - elbow[2]])
-    
-    dot_product = np.dot(v1, v2)
-    norm_v1 = np.linalg.norm(v1)
-    norm_v2 = np.linalg.norm(v2)
-    
-    if norm_v1 > 0 and norm_v2 > 0:
-        cos_theta = dot_product / (norm_v1 * norm_v2)
-        cos_theta = np.clip(cos_theta, -1.0, 1.0)
-        return math.acos(cos_theta) * 180 / math.pi
-    
-    return 0
-
-def calculate_wrist_flexion_angle(landmarks_sequence, elbow_idx, wrist_idx):
-    """Calculate wrist flexion angle for wrist flexion exercise"""
-    elbow = landmarks_sequence[elbow_idx]
-    wrist = landmarks_sequence[wrist_idx]
-    
-    # Vector from elbow to wrist
-    v1 = np.array([wrist[0] - elbow[0], wrist[1] - elbow[1], wrist[2] - elbow[2]])
-    
-    # Reference vector (vertical)
-    v2 = np.array([0, -1, 0])  # Pointing downward
-    
-    dot_product = np.dot(v1, v2)
-    norm_v1 = np.linalg.norm(v1)
-    
-    if norm_v1 > 0:
-        cos_theta = dot_product / norm_v1
-        cos_theta = np.clip(cos_theta, -1.0, 1.0)
-        return math.acos(cos_theta) * 180 / math.pi
-    
-    return 0
-
 def calculate_wrist_deviation(landmarks_sequence, elbow_idx, wrist_idx):
     """Calculate wrist deviation angle"""
-    elbow = landmarks_sequence[elbow_idx]
-    wrist = landmarks_sequence[wrist_idx]
+    # Convert to numpy arrays
+    elbow = np.array([
+        landmarks_sequence[elbow_idx][0],
+        landmarks_sequence[elbow_idx][1],
+        landmarks_sequence[elbow_idx][2]
+    ], dtype=np.float32)
+    
+    wrist = np.array([
+        landmarks_sequence[wrist_idx][0],
+        landmarks_sequence[wrist_idx][1],
+        landmarks_sequence[wrist_idx][2]
+    ], dtype=np.float32)
     
     # Vector from elbow to wrist
-    v1 = np.array([wrist[0] - elbow[0], wrist[1] - elbow[1], wrist[2] - elbow[2]])
+    v1 = wrist - elbow
     
     # Reference vector (vertical)
-    v2 = np.array([0, 1, 0])  # Pointing upward
+    v2 = np.array([0, 1, 0], dtype=np.float32)  # Pointing upward
     
     dot_product = np.dot(v1, v2)
     norm_v1 = np.linalg.norm(v1)
