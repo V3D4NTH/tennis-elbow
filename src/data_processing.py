@@ -4,6 +4,11 @@ import numpy as np
 import os
 import pickle
 import re
+import argparse
+
+# Set default paths directly in the code
+DEFAULT_RAW_VIDEOS_DIR = "C:\\Users\\itsth\\Desktop\\skill issue\\ugh\\capstone\\tennis_elbow_rehab1\\data\\raw_videos"
+DEFAULT_PROCESSED_DATA_DIR = "C:\\Users\\itsth\\Desktop\\skill issue\\ugh\\capstone\\tennis_elbow_rehab1\data\\processed_data"
 
 mp_pose = mp.solutions.pose
 pose = mp_pose.Pose(
@@ -64,9 +69,10 @@ def process_folder_structure(raw_videos_dir, processed_data_dir):
                 print(f"Processed {video_path} -> saved to {dest_dir}")
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--raw_videos_dir', required=True)
-    parser.add_argument('--processed_data_dir', required=True)
-    args = parser.parse_args()
+    #parser = argparse.ArgumentParser()
+    #parser.add_argument('--raw_videos_dir', required=True)
+    #parser.add_argument('--processed_data_dir', required=True)
+    #args = parser.parse_args()
     
-    process_folder_structure(args.raw_videos_dir, args.processed_data_dir)
+    #process_folder_structure(args.raw_videos_dir, args.processed_data_dir)
+    process_folder_structure(DEFAULT_RAW_VIDEOS_DIR, DEFAULT_PROCESSED_DATA_DIR)
