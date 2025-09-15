@@ -33,7 +33,7 @@ tennis_elbow_rehab/
 
 2. Process Videos
 
-python src/data_processing.py --raw_videos_dir data/raw_videos --processed_data_dir data/processed_data
+python src/data_processing.py
 
 
 3. Train Models
@@ -45,5 +45,6 @@ python src/model_training.py
 python src/real_time_eval.py
 
 5. Launch Web Interface
+
 
 streamlit run src/ui_streamlit.py
