@@ -7,9 +7,8 @@ import re
 import argparse
 
 # Set default paths directly in the code
-DEFAULT_RAW_VIDEOS_DIR = "C:\\Users\\itsth\\Desktop\\skill issue\\ugh\\capstone\\tennis_elbow_rehab1\\data\\raw_videos"
-DEFAULT_PROCESSED_DATA_DIR = "C:\\Users\\itsth\\Desktop\\skill issue\\ugh\\capstone\\tennis_elbow_rehab1\data\\processed_data"
-
+DEFAULT_RAW_VIDEOS_DIR = "data/raw_videos"
+DEFAULT_PROCESSED_DATA_DIR = "data/processed_data"
 mp_pose = mp.solutions.pose
 pose = mp_pose.Pose(
     min_detection_confidence=0.5,
