@@ -5,13 +5,12 @@ from torch.utils.data import Dataset, DataLoader
 import numpy as np
 import os
 import pickle
-from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import StandardScaler
-from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import accuracy_score
-import joblib
 import math
 import traceback
+
+# Detect available device
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+print(f"Using device: {device}")
 
 # Exercise configuration
 EXERCISE_TYPES = ['wrist_extension', 'wrist_flexion']
@@ -30,209 +29,58 @@ EXERCISE_CONFIG = {
     }
 }
 
-def safe_calculate_angle(v1, v2):
-    """Safely calculate angle between two vectors"""
-    try:
-        dot_product = np.dot(v1, v2)
-        norm_v1 = np.linalg.norm(v1)
-        norm_v2 = np.linalg.norm(v2)
-        
-        if norm_v1 > 0 and norm_v2 > 0:
-            cos_theta = dot_product / (norm_v1 * norm_v2)
-            cos_theta = np.clip(cos_theta, -1.0, 1.0)
-            return math.acos(cos_theta) * 180 / math.pi
-        return 0.0
-    except Exception as e:
-        print(f"Error calculating angle: {e}")
-        traceback.print_exc()
-        return 0.0
 
-def calculate_exercise_specific_features(landmarks_sequence, exercise_type):
-    """Calculate biomechanical features tailored to specific exercises"""
-    try:
-        config = EXERCISE_CONFIG[exercise_type]
-        features = {}
-        
-        # Primary metric calculation
-        if config['primary_metric'] == 'elbow_flexion':
-            try:
-                # Check if we have enough landmarks
-                if len(landmarks_sequence) < 12:  # Need at least 12 landmarks for shoulder, elbow, wrist
-                    print(f"Warning: Insufficient landmarks for elbow_flexion calculation. Got {len(landmarks_sequence)} landmarks.")
-                    features['elbow_flexion'] = 0.0
-                else:
-                    shoulder = np.array([
-                        landmarks_sequence[11][0],
-                        landmarks_sequence[11][1],
-                        landmarks_sequence[11][2]
-                    ], dtype=np.float32)
-                    
-                    elbow = np.array([
-                        landmarks_sequence[config['key_joints']['elbow']][0],
-                        landmarks_sequence[config['key_joints']['elbow']][1],
-                        landmarks_sequence[config['key_joints']['elbow']][2]
-                    ], dtype=np.float32)
-                    
-                    wrist = np.array([
-                        landmarks_sequence[config['key_joints']['wrist']][0],
-                        landmarks_sequence[config['key_joints']['wrist']][1],
-                        landmarks_sequence[config['key_joints']['wrist']][2]
-                    ], dtype=np.float32)
-                    
-                    # Vector from elbow to wrist
-                    v1 = wrist - elbow
-                    
-                    # Reference vector (vertical)
-                    v2 = np.array([0, -1, 0], dtype=np.float32)  # Downward reference vector
-                    
-                    features['elbow_flexion'] = safe_calculate_angle(v1, v2)
-            except IndexError as e:
-                print(f"Error in elbow_flexion calculation: {e}")
-                traceback.print_exc()
-                features['elbow_flexion'] = 0.0
-        
-        elif config['primary_metric'] == 'wrist_flexion_angle':
-            try:
-                # Check if we have enough landmarks
-                if len(landmarks_sequence) < config['key_joints']['elbow'] + 1:  # Need elbow and wrist
-                    print(f"Warning: Insufficient landmarks for wrist_flexion_angle calculation. Got {len(landmarks_sequence)} landmarks.")
-                    features['wrist_flexion_angle'] = 0.0
-                else:
-                    elbow = np.array([
-                        landmarks_sequence[config['key_joints']['elbow']][0],
-                        landmarks_sequence[config['key_joints']['elbow']][1],
-                        landmarks_sequence[config['key_joints']['elbow']][2]
-                    ], dtype=np.float32)
-                    
-                    wrist = np.array([
-                        landmarks_sequence[config['key_joints']['wrist']][0],
-                        landmarks_sequence[config['key_joints']['wrist']][1],
-                        landmarks_sequence[config['key_joints']['wrist']][2]
-                    ], dtype=np.float32)
-                    
-                    # Vector from elbow to wrist
-                    v1 = wrist - elbow
-                    
-                    # Reference vector (vertical)
-                    v2 = np.array([0, -1, 0], dtype=np.float32)  # Downward reference vector
-                    
-                    features['wrist_flexion_angle'] = safe_calculate_angle(v1, v2)
-            except IndexError as e:
-                print(f"Error in wrist_flexion_angle calculation: {e}")
-                traceback.print_exc()
-                features['wrist_flexion_angle'] = 0.0
-        
-        # Secondary metrics
-        for metric in config['secondary_metrics']:
-            try:
-                if metric == 'wrist_deviation':
-                    features['wrist_deviation'] = calculate_wrist_deviation(
-                        landmarks_sequence, 
-                        config['key_joints']['elbow'], 
-                        config['key_joints']['wrist']
-                    )
-                elif metric == 'movement_smoothness':
-                    features['movement_smoothness'] = calculate_movement_smoothness(landmarks_sequence)
-                elif metric == 'elbow_stability':
-                    features['elbow_stability'] = calculate_elbow_stability(
-                        landmarks_sequence, 
-                        config['key_joints']['elbow']
-                    )
-                elif metric == 'range_of_motion':
-                    features['range_of_motion'] = calculate_range_of_motion(
-                        landmarks_sequence, 
-                        config['key_joints']['elbow'], 
-                        config['key_joints']['wrist']
-                    )
-            except IndexError as e:
-                print(f"Error calculating secondary metric {metric}: {e}")
-                traceback.print_exc()
-                features[metric] = 0.0
-        
-        return features
-    except Exception as e:
-        print(f"Error in calculate_exercise_specific_features: {e}")
-        traceback.print_exc()
-        return {}
 
-def calculate_wrist_deviation(landmarks_sequence, elbow_idx, wrist_idx):
-    """Calculate wrist deviation angle with error handling"""
-    try:
-        # Check if we have enough landmarks
-        if len(landmarks_sequence) <= max(elbow_idx, wrist_idx):
-            print(f"Warning: Insufficient landmarks for wrist_deviation calculation. Got {len(landmarks_sequence)} landmarks.")
-            return 0.0
+class TemporalCNN(nn.Module):
+    """1D CNN for temporal landmark sequences"""
+    def __init__(self, in_channels=99, num_classes=3):  # Changed to accept variable channels
+        super(TemporalCNN, self).__init__()
         
-        elbow = np.array([
-            landmarks_sequence[elbow_idx][0],
-            landmarks_sequence[elbow_idx][1],
-            landmarks_sequence[elbow_idx][2]
-        ], dtype=np.float32)
+        # in_channels can be 66 (2D) or 99 (3D)
         
-        wrist = np.array([
-            landmarks_sequence[wrist_idx][0],
-            landmarks_sequence[wrist_idx][1],
-            landmarks_sequence[wrist_idx][2]
-        ], dtype=np.float32)
+        self.conv1 = nn.Conv1d(in_channels=in_channels, out_channels=64, kernel_size=3, padding=1)
+        self.bn1 = nn.BatchNorm1d(64)
+        self.pool1 = nn.MaxPool1d(kernel_size=2)
         
-        # Vector from elbow to wrist
-        v1 = wrist - elbow
+        self.conv2 = nn.Conv1d(in_channels=64, out_channels=128, kernel_size=3, padding=1)
+        self.bn2 = nn.BatchNorm1d(128)
+        self.pool2 = nn.MaxPool1d(kernel_size=2)
         
-        # Reference vector (vertical)
-        v2 = np.array([0, 1, 0], dtype=np.float32)  # Pointing upward
+        self.conv3 = nn.Conv1d(in_channels=128, out_channels=256, kernel_size=3, padding=1)
+        self.bn3 = nn.BatchNorm1d(256)
+        self.pool3 = nn.MaxPool1d(kernel_size=2)
         
-        return safe_calculate_angle(v1, v2)
-    except IndexError as e:
-        print(f"Error in calculate_wrist_deviation: {e}")
-        traceback.print_exc()
-        return 0.0
+        self.global_avg_pool = nn.AdaptiveAvgPool1d(1)
+        
+        self.fc1 = nn.Linear(256, 128)
+        self.dropout = nn.Dropout(0.5)
+        self.fc2 = nn.Linear(128, num_classes)
+        
+        self.relu = nn.ReLU()
+    
+    
 
-def calculate_movement_smoothness(landmarks_sequence):
-    """Calculate movement smoothness based on landmark trajectory"""
-    try:
-        positions = [landmarks[15][:2] for landmarks in landmarks_sequence]
-        velocities = np.diff(positions, axis=0)
-        accelerations = np.diff(velocities, axis=0)
+    def forward(self, x):
+        # x shape: (batch, num_landmarks*num_coords, sequence_length)
         
-        jerk = np.mean(np.abs(accelerations))
-        return float(jerk)
-    except Exception as e:
-        print(f"Error in calculate_movement_smoothness: {e}")
-        traceback.print_exc()
-        return 0.0
-
-def calculate_elbow_stability(landmarks_sequence, elbow_idx):
-    """Calculate elbow stability by analyzing variance in joint position"""
-    try:
-        elbow_positions = [landmarks[elbow_idx][:3] for landmarks in landmarks_sequence]
-        elbow_positions = np.array(elbow_positions)
+        x = self.relu(self.bn1(self.conv1(x)))
+        x = self.pool1(x)
         
-        # Calculate standard deviation of elbow position
-        std_deviation = np.std(elbow_positions, axis=0)
-        overall_stability = np.mean(std_deviation)
+        x = self.relu(self.bn2(self.conv2(x)))
+        x = self.pool2(x)
         
-        return float(overall_stability)
-    except Exception as e:
-        print(f"Error in calculate_elbow_stability: {e}")
-        traceback.print_exc()
-        return 0.0
-
-def calculate_range_of_motion(landmarks_sequence, elbow_idx, wrist_idx):
-    """Calculate range of motion between elbow and wrist"""
-    try:
-        elbow_positions = [landmarks[elbow_idx][:3] for landmarks in landmarks_sequence]
-        wrist_positions = [landmarks[wrist_idx][:3] for landmarks in landmarks_sequence]
+        x = self.relu(self.bn3(self.conv3(x)))
+        x = self.pool3(x)
         
-        # Calculate distances between elbow and wrist
-        distances = [np.linalg.norm(np.array(elbow) - np.array(wrist)) 
-                     for elbow, wrist in zip(elbow_positions, wrist_positions)]
+        # Global average pooling
+        x = self.global_avg_pool(x)
+        x = x.view(x.size(0), -1)  # Flatten
         
-        # Return max distance minus min distance
-        return float(max(distances) - min(distances))
-    except Exception as e:
-        print(f"Error in calculate_range_of_motion: {e}")
-        traceback.print_exc()
-        return 0.0
+        x = self.relu(self.fc1(x))
+        x = self.dropout(x)
+        x = self.fc2(x)
+        
+        return x
 
 class ExerciseDataset(Dataset):
     def __init__(self, data_dir, exercise_type):
@@ -267,25 +115,61 @@ class ExerciseDataset(Dataset):
             with open(self.data_paths[idx], 'rb') as f:
                 landmarks_sequence = pickle.load(f)
             
-            features = calculate_exercise_specific_features(landmarks_sequence, self.exercise_type)
-            feature_vector = list(features.values())
+            # Convert to numpy array
+            landmarks_array = np.array(landmarks_sequence, dtype=np.float32)
             
-            # Ensure consistent feature vector length
-            expected_length = len(EXERCISE_CONFIG[self.exercise_type]['secondary_metrics']) + 1
-            if len(feature_vector) != expected_length:
-                print(f"Warning: Inconsistent feature vector length at index {idx}. Expected {expected_length}, got {len(feature_vector)}. Filling with zeros.")
-                # Pad with zeros if needed
-                if len(feature_vector) < expected_length:
-                    feature_vector.extend([0.0] * (expected_length - len(feature_vector)))
+            # Handle different input shapes
+            if len(landmarks_array.shape) == 2:
+                # Already flattened: (seq_len, num_features)
+                seq_len, num_features = landmarks_array.shape
+                
+                # Determine if it's 2D or 3D coords
+                if num_features == 66:  # 33 landmarks * 2 coords (x, y)
+                    num_landmarks = 33
+                    num_coords = 2
+                elif num_features == 99:  # 33 landmarks * 3 coords (x, y, z)
+                    num_landmarks = 33
+                    num_coords = 3
                 else:
-                    feature_vector = feature_vector[:expected_length]
+                    # Unknown format, try to infer
+                    num_landmarks = num_features // 3 if num_features % 3 == 0 else num_features // 2
+                    num_coords = 3 if num_features % 3 == 0 else 2
+                
+                # Already in correct format, just transpose
+                landmarks_flat = landmarks_array.T  # Shape: (num_features, seq_len)
+                
+            elif len(landmarks_array.shape) == 3:
+                # Shape: (seq_len, num_landmarks, num_coords)
+                seq_len, num_landmarks, num_coords = landmarks_array.shape
+                
+                # Flatten and transpose
+                landmarks_flat = landmarks_array.reshape(seq_len, num_landmarks * num_coords).T
             
-            return torch.tensor(feature_vector, dtype=torch.float32), self.labels[idx]
+            else:
+                raise ValueError(f"Unexpected data shape: {landmarks_array.shape}")
+            
+            # Pad or truncate to fixed length
+            target_length = 60  # Fixed sequence length
+            current_length = landmarks_flat.shape[1]
+            
+            if current_length < target_length:
+                # Pad with zeros
+                padding = np.zeros((landmarks_flat.shape[0], target_length - current_length), dtype=np.float32)
+                landmarks_flat = np.concatenate([landmarks_flat, padding], axis=1)
+            elif current_length > target_length:
+                # Truncate
+                landmarks_flat = landmarks_flat[:, :target_length]
+            
+            # Determine input channels for return
+            num_channels = landmarks_flat.shape[0]
+            
+            return torch.tensor(landmarks_flat, dtype=torch.float32), self.labels[idx]
+            
         except Exception as e:
             print(f"Error loading data for item {idx}: {e}")
             traceback.print_exc()
-            # Return dummy data to keep the program running
-            return torch.zeros(expected_length, dtype=torch.float32), 0
+            # Return dummy data with standard shape (99 channels for 33 landmarks * 3 coords)
+            return torch.zeros((99, 60), dtype=torch.float32), 0
 
 def train_model_for_exercise(exercise_type, data_dir):
     """Train model for a specific exercise type"""
@@ -304,13 +188,13 @@ def train_model_for_exercise(exercise_type, data_dir):
         train_loader = DataLoader(train_set, batch_size=32, shuffle=True)
         val_loader = DataLoader(val_set, batch_size=32)
         
-        # Initialize model (simple CNN for demonstration)
-        num_features = len(EXERCISE_CONFIG[exercise_type]['secondary_metrics']) + 1
-        model = nn.Sequential(
-            nn.Linear(num_features, 64),
-            nn.ReLU(),
-            nn.Linear(64, 3)
-        )
+        # In train_model_for_exercise, replace model initialization with:
+        # Get first sample to determine input channels
+        sample_data, _ = dataset[0]
+        in_channels = sample_data.shape[0]  # Will be 66 or 99
+
+        model = TemporalCNN(in_channels=in_channels, num_classes=3)
+        model = model.to(device)  # Move model to device
         
         criterion = nn.CrossEntropyLoss()
         optimizer = optim.Adam(model.parameters(), lr=0.001)
@@ -322,6 +206,7 @@ def train_model_for_exercise(exercise_type, data_dir):
             running_loss = 0.0
             
             for inputs, labels in train_loader:
+                inputs, labels = inputs.to(device), labels.to(device)  # Move data to device
                 optimizer.zero_grad()
                 outputs = model(inputs)
                 loss = criterion(outputs, labels)
@@ -335,6 +220,7 @@ def train_model_for_exercise(exercise_type, data_dir):
             total = 0
             with torch.no_grad():
                 for inputs, labels in val_loader:
+                    inputs, labels = inputs.to(device), labels.to(device)  # Move data to device
                     outputs = model(inputs)
                     _, predicted = torch.max(outputs.data, 1)
                     total += labels.size(0)
@@ -345,7 +231,9 @@ def train_model_for_exercise(exercise_type, data_dir):
             
             if accuracy > best_accuracy:
                 best_accuracy = accuracy
-                torch.save(model.state_dict(), f'models/{exercise_type}_model.pth')
+                # Save model state dict (always save on CPU for portability)
+                torch.save(model.cpu().state_dict(), f'models/{exercise_type}_model.pth')
+                model = model.to(device)  # Move back to device for continued training
         
         print(f"Successfully trained {exercise_type} model with {best_accuracy:.2f}% accuracy")
         return model
@@ -380,4 +268,4 @@ def auto_train_all_exercises(data_dir):
 
 if __name__ == '__main__':
     # Use the specific path you provided
-    auto_train_all_exercises('C:\\Users\\itsth\\Desktop\\skill issue\\ugh\\capstone\\tennis_elbow_rehab1\\data\\processed_data')
+    auto_train_all_exercises('data/processed_data')
