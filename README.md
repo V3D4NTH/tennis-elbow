@@ -3,10 +3,10 @@
 ## Install Dependencies
 ```bash
 pip install -r requirements.txt
+```
 
-
-Project Structure
-
+## Project Structure
+```
 tennis_elbow_rehab/
 ├── data/
 │   ├── raw_videos/               # Raw video files organized by exercise
@@ -32,23 +32,37 @@ tennis_elbow_rehab/
 │   └── ui_streamlit.py           # Streamlit UI
 ├── requirements.txt
 └── README.md
+```
 
+## Usage
 
+### 1. Install Dependencies
+```bash
+pip install -r requirements.txt
+```
 
-2. Process Videos
+### 2. Process Videos
+```bash
+python src/data_processing.py
+```
 
-python src/data_processing.py 
-
-3. Train Models
-
+### 3. Train Models
+```bash
 python src/model_training.py
+```
 
-4. Real-time Evaluation
-
+### 4. Real-time Evaluation
+```bash
 python src/real_time_eval.py
+```
 
-5. Launch Web Interface
-
-
+### 5. Launch Web Interface
+```bash
 streamlit run src/ui_streamlit.py
+```
 
+## Important Notes
+- Always run commands from the project root directory (tennis-elbow/)
+- Ensure you have processed data before training models
+- Models will be saved in the `models/` directory
+- The system supports both CPU and GPU training automatically
