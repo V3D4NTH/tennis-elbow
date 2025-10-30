@@ -32,31 +32,43 @@ EXERCISE_CONFIG = {
 
 
 class TemporalCNN(nn.Module):
-    """1D CNN for temporal landmark sequences"""
-    def __init__(self, in_channels=99, num_classes=3):  # Changed to accept variable channels
+    """1D CNN for temporal landmark sequences - 11 Total Layers"""
+    def __init__(self, in_channels=99, num_classes=3):
         super(TemporalCNN, self).__init__()
         
-        # in_channels can be 66 (2D) or 99 (3D)
+        # in_channels can be 66 (2D landmarks: x,y) or 99 (3D landmarks: x,y,z)
         
+        # LAYER 1: First Conv1D block
         self.conv1 = nn.Conv1d(in_channels=in_channels, out_channels=64, kernel_size=3, padding=1)
+        # LAYER 2: BatchNorm
         self.bn1 = nn.BatchNorm1d(64)
+        # LAYER 3: MaxPool (reduces sequence length by half)
         self.pool1 = nn.MaxPool1d(kernel_size=2)
         
+        # LAYER 4: Second Conv1D block
         self.conv2 = nn.Conv1d(in_channels=64, out_channels=128, kernel_size=3, padding=1)
+        # LAYER 5: BatchNorm
         self.bn2 = nn.BatchNorm1d(128)
+        # LAYER 6: MaxPool
         self.pool2 = nn.MaxPool1d(kernel_size=2)
         
+        # LAYER 7: Third Conv1D block
         self.conv3 = nn.Conv1d(in_channels=128, out_channels=256, kernel_size=3, padding=1)
+        # LAYER 8: BatchNorm
         self.bn3 = nn.BatchNorm1d(256)
+        # LAYER 9: MaxPool
         self.pool3 = nn.MaxPool1d(kernel_size=2)
         
+        # Global average pooling (not counted as layer - no learnable parameters)
         self.global_avg_pool = nn.AdaptiveAvgPool1d(1)
         
+        # LAYER 10: First Fully Connected layer
         self.fc1 = nn.Linear(256, 128)
-        self.dropout = nn.Dropout(0.5)
+        self.dropout = nn.Dropout(0.5)  # Regularization, not a layer
+        # LAYER 11: Output Fully Connected layer
         self.fc2 = nn.Linear(128, num_classes)
         
-        self.relu = nn.ReLU()
+        self.relu = nn.ReLU()  # Activation function, not a separate layer
     
     
 
