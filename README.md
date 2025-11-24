@@ -51,4 +51,11 @@ python src/real_time_eval.py
 
 
 streamlit run src/ui_streamlit.py
+```
+
+## Architecture
+
+<img width="1255" height="1069" alt="image" src="https://github.com/user-attachments/assets/fcf66e24-c38b-4c95-82b0-4de377f93bba" />
+
+
 
