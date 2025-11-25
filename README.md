@@ -1,5 +1,7 @@
 # Tennis Elbow Rehab
 
+Project Poster and Report: https://drive.google.com/drive/u/2/folders/1BBe6qx9uW_LgEUr3vUch2dd6onEXA2MB
+
 ## Install Dependencies
 ```bash
 pip install -r requirements.txt
@@ -56,6 +58,7 @@ streamlit run src/ui_streamlit.py
 ## Architecture
 
 <img width="1255" height="1069" alt="image" src="https://github.com/user-attachments/assets/fcf66e24-c38b-4c95-82b0-4de377f93bba" />
+
 
 
 
